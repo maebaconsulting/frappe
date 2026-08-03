@@ -48,18 +48,17 @@ jobs:
       - name: Récupérer ce dépôt (apps.json)
         uses: actions/checkout@v4
 
+      # Contrôle préalable : une branche inexistante ne se révélerait autrement
+      # qu'après plusieurs minutes de construction, au bench init.
+      - name: Vérifier apps.json et l'existence des branches
+        run: python3 .github/scripts/verifier-apps.py
+
       - name: Récupérer frappe/frappe_docker
         uses: actions/checkout@v4
         with:
           repository: frappe/frappe_docker
           ref: ${{ inputs.frappe_docker_ref || 'main' }}
           path: frappe_docker
-
-      - name: Vérifier la syntaxe de apps.json
-        run: |
-          python3 -c "import json,sys; d=json.load(open('apps.json',encoding='utf-8')); \
-            assert isinstance(d, list) and d, 'apps.json doit être une liste non vide'; \
-            [print('application :', a['url'], '->', a['branch']) for a in d]"
 
       - name: Préparer Buildx
         uses: docker/setup-buildx-action@v3

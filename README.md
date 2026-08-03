@@ -28,8 +28,13 @@ Applications installées sur le site :
 | Payments | `frappe/payments` | `version-16` |
 | Frappe HR | `frappe/hrms` | `version-16` |
 | Frappe CRM | `frappe/crm` | `main` |
-| Frappe Builder | `frappe/builder` | `main` |
+| Frappe Builder | `frappe/builder` | `master` |
 | Frappe Drive | `frappe/drive` | `main` |
+
+Les branches ci-dessus sont vérifiées : elles existent et correspondent à la
+branche de publication de chaque application. Frappe Builder publie depuis
+`master` et n'a pas de branche `main` ; une valeur inexacte fait échouer le
+`bench init` du workflow avec un `Remote branch not found`.
 
 ## 1. Construction et publication de l'image
 
