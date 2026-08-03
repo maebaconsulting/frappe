@@ -311,17 +311,17 @@ Chemins relevés sur l'instance en fonctionnement, pas déduits de la documentat
 | Drive | `https://erp.mowoapp.com/drive` | |
 
 Deux pièges de navigation valent d'être notés. Frappe 16 a déplacé le desk de `/app`
-vers `/desk` : l'ancien chemin fonctionne toujours par redirection, mais les liens
+vers `/desk` : l'ancien chemin fonctionne toujours par redirection, mais les liens
 durables gagnent à pointer sur `/desk`. Et l'espace collaborateur RH répond sur
 `/hrms`, alors que `/hr` seul renvoie un 404 alors même que ses sous-routes comme
 `/hr/dashboard` répondent normalement.
 
-Connexion initiale : utilisateur `Administrator`, mot de passe celui de la variable
-`ADMIN_PASSWORD`. Le champ du formulaire s'intitule « Courriel » mais accepte le nom
+Connexion initiale : utilisateur `Administrator`, mot de passe celui de la variable
+`ADMIN_PASSWORD`. Le champ du formulaire s'intitule « Courriel » mais accepte le nom
 d'utilisateur.
 
-Le service redirige HTTP vers HTTPS en 301. Un navigateur affichant « Non sécurisé »
-sur ce domaine est resté sur une page HTTP en cache : un rechargement forcé suffit.
+Le service redirige HTTP vers HTTPS en 301. Un navigateur affichant « Non sécurisé »
+sur ce domaine est resté sur une page HTTP en cache : un rechargement forcé suffit.
 
 
 ## 5. Mise à jour de l'image
@@ -411,7 +411,7 @@ de l'étape 2 de la séquence ci-dessus.
 
 Les sauvegardes automatiques de Dokploy ciblent les bases de données que Dokploy gère
 lui-même, déclarées comme services de type base de données. Ici MariaDB est déclarée
-dans le fichier Compose : Dokploy ne la voit pas et ne la sauvegardera jamais. Sans la
+dans le fichier Compose : Dokploy ne la voit pas et ne la sauvegardera jamais. Sans la
 mise en place ci-dessous, **rien n'est sauvegardé**.
 
 ### Le script
@@ -419,16 +419,16 @@ mise en place ci-dessous, **rien n'est sauvegardé**.
 `scripts/frappe-backup.sh` produit une sauvegarde applicative complète, base et
 fichiers, la sort du conteneur et la dépose sur l'hôte.
 
-Il enchaîne : résolution du nom du conteneur backend, `bench backup --with-files`,
+Il enchaîne : résolution du nom du conteneur backend, `bench backup --with-files`,
 copie des seules archives produites par cette exécution, **vérification de la taille de
 chaque copie**, export optionnel hors du serveur, puis purge des anciennes archives.
 
 Cet ordre est délibéré. La séquence naïve, sauvegarder puis purger, détruit les
-archives antérieures le jour où le disque de destination est plein : la nouvelle copie
+archives antérieures le jour où le disque de destination est plein : la nouvelle copie
 est tronquée, la purge s'exécute quand même, et il ne reste qu'une sauvegarde
 inutilisable. Ici aucune suppression n'a lieu tant qu'une copie vérifiée n'existe pas.
 
-Le script se règle par variables d'environnement, toutes optionnelles :
+Le script se règle par variables d'environnement, toutes optionnelles :
 
 | Variable | Défaut | Rôle |
 | --- | --- | --- |
@@ -439,7 +439,7 @@ Le script se règle par variables d'environnement, toutes optionnelles :
 | `RCLONE_REMOTE` | vide | Destination `rclone` pour l'export hors serveur |
 | `MOTIF_CONTENEUR` | `-backend-` | Motif de résolution du conteneur backend |
 
-Le nom du conteneur n'est pas figé : il est engendré par Dokploy et change si le
+Le nom du conteneur n'est pas figé : il est engendré par Dokploy et change si le
 service est recréé. Le script le résout à chaque exécution et refuse de continuer si
 le motif correspond à zéro ou à plusieurs conteneurs, plutôt que d'en choisir un au
 hasard.
@@ -451,14 +451,14 @@ sudo git clone https://github.com/maebaconsulting/frappe.git /opt/frappe-deploy
 sudo chmod +x /opt/frappe-deploy/scripts/frappe-backup.sh
 ```
 
-Premier essai à la main, avant toute planification :
+Premier essai à la main, avant toute planification :
 
 ```bash
 sudo /opt/frappe-deploy/scripts/frappe-backup.sh
 ```
 
 La sortie doit se terminer par une ligne `Sauvegarde terminée` et trois fichiers doivent
-apparaître dans `/var/backups/frappe` : le dump SQL en `.sql.gz`, les fichiers publics
+apparaître dans `/var/backups/frappe` : le dump SQL en `.sql.gz`, les fichiers publics
 et les fichiers privés en `.tar`.
 
 ### Tâche planifiée
@@ -474,10 +474,10 @@ sudo crontab -e
 Une sauvegarde complète peut dépasser les cent secondes de délai de Cloudflare, d'où le
 lancement par cron et non depuis une interface web.
 
-Le script pose un verrou avec `flock` : si une sauvegarde déborde sur l'heure de la
+Le script pose un verrou avec `flock` : si une sauvegarde déborde sur l'heure de la
 suivante, la seconde renonce proprement au lieu de s'exécuter en parallèle.
 
-Pour mettre le script à jour après une modification dans ce dépôt :
+Pour mettre le script à jour après une modification dans ce dépôt :
 
 ```bash
 sudo git -C /opt/frappe-deploy pull
@@ -486,7 +486,7 @@ sudo git -C /opt/frappe-deploy pull
 ### Export hors du serveur
 
 Une sauvegarde qui reste sur la machine sauvegardée ne protège de rien. Configurer
-`rclone` vers un stockage objet, puis renseigner la variable dans la tâche planifiée :
+`rclone` vers un stockage objet, puis renseigner la variable dans la tâche planifiée :
 
 ```txt
 30 2 * * * RCLONE_REMOTE=distant:sauvegardes/erp-mowoapp /opt/frappe-deploy/scripts/frappe-backup.sh >> /var/log/frappe-backup.log 2>&1
@@ -508,7 +508,7 @@ docker exec -it "$CONTENEUR" bench --site erp.mowoapp.com restore \
 ```
 
 Si les archives ne sont plus dans le conteneur parce que la purge est passée, les y
-remettre d'abord :
+remettre d'abord :
 
 ```bash
 docker cp /var/backups/frappe/<archive>.sql.gz \
