@@ -1,0 +1,9 @@
+# Secrets et variables locales
+.env
+.env.local
+
+# Clone de travail du dépôt frappe_docker (recréé par le workflow)
+frappe_docker/
+
+# macOS
+.DS_Store

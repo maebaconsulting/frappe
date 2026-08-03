@@ -1,0 +1,126 @@
+name: Construction de l'image Frappe
+
+# Le build tourne ici et pas en local : le poste de travail est en arm64, la cible
+# de production en amd64. Une construction locale passerait par l'émulation QEMU,
+# ce qui rend la compilation des interfaces Vue (CRM, Builder, Drive) interminable.
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Tag de l'image publiée sur ghcr.io"
+        required: false
+        default: version-16
+        type: string
+      frappe_docker_ref:
+        description: "Branche ou tag du dépôt frappe/frappe_docker à utiliser"
+        required: false
+        default: main
+        type: string
+  push:
+    branches:
+      - main
+    paths:
+      - apps.json
+      - .github/workflows/build-image.yml
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: maebaconsulting/frappe
+  FRAPPE_PATH: https://github.com/frappe/frappe
+  FRAPPE_BRANCH: version-16
+
+concurrency:
+  group: build-image
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Construire et publier l'image
+    runs-on: ubuntu-latest
+    # La compilation des interfaces Vue de CRM, Builder et Drive est longue.
+    timeout-minutes: 180
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Récupérer ce dépôt (apps.json)
+        uses: actions/checkout@v4
+
+      - name: Récupérer frappe/frappe_docker
+        uses: actions/checkout@v4
+        with:
+          repository: frappe/frappe_docker
+          ref: ${{ inputs.frappe_docker_ref || 'main' }}
+          path: frappe_docker
+
+      - name: Vérifier la syntaxe de apps.json
+        run: |
+          python3 -c "import json,sys; d=json.load(open('apps.json',encoding='utf-8')); \
+            assert isinstance(d, list) and d, 'apps.json doit être une liste non vide'; \
+            [print('application :', a['url'], '->', a['branch']) for a in d]"
+
+      - name: Préparer Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Authentification sur GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Calculer les tags
+        id: tags
+        env:
+          # L'entrée transite par une variable d'environnement plutôt que par une
+          # interpolation directe dans le shell (injection de commande).
+          INPUT_TAG: ${{ inputs.image_tag || 'version-16' }}
+        run: |
+          if ! printf '%s' "$INPUT_TAG" | grep -Eq '^[A-Za-z0-9._-]{1,100}$'; then
+            echo "Tag invalide : $INPUT_TAG" >&2
+            exit 1
+          fi
+          TAG="$INPUT_TAG"
+          STAMP="$(date -u +%Y%m%d-%H%M%S)"
+          IMAGE="${REGISTRY}/${IMAGE_NAME}"
+          {
+            echo "tags=${IMAGE}:${TAG},${IMAGE}:${TAG}-${STAMP}"
+            echo "mobile=${IMAGE}:${TAG}"
+            echo "immuable=${IMAGE}:${TAG}-${STAMP}"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Construire et publier
+        uses: docker/build-push-action@v6
+        with:
+          # Le contexte est la racine de frappe_docker : le Containerfile y copie
+          # resources/core/main-entrypoint.sh et resources/core/start.sh.
+          context: ./frappe_docker
+          file: ./frappe_docker/images/layered/Containerfile
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          sbom: false
+          tags: ${{ steps.tags.outputs.tags }}
+          build-args: |
+            FRAPPE_PATH=${{ env.FRAPPE_PATH }}
+            FRAPPE_BRANCH=${{ env.FRAPPE_BRANCH }}
+            CACHE_BUST=${{ github.run_id }}
+          # apps.json passe en secret BuildKit et jamais en build-arg : un build-arg
+          # reste lisible en clair dans docker image history.
+          secret-files: |
+            apps_json=${{ github.workspace }}/apps.json
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Récapitulatif
+        run: |
+          {
+            echo "## Image publiée"
+            echo ""
+            echo "- Tag mobile : \`${{ steps.tags.outputs.mobile }}\`"
+            echo "- Tag immuable : \`${{ steps.tags.outputs.immuable }}\`"
+            echo ""
+            echo "Renseigner l'un des deux dans la variable \`ERP_IMAGE\` du service Dokploy."
+          } >> "$GITHUB_STEP_SUMMARY"
