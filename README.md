@@ -29,12 +29,24 @@ Applications installées sur le site :
 | Frappe HR | `frappe/hrms` | `version-16` |
 | Frappe CRM | `frappe/crm` | `main` |
 | Frappe Builder | `frappe/builder` | `master` |
-| Frappe Drive | `frappe/drive` | `main` |
+| Frappe Drive | `frappe/drive` | `develop` |
 
-Les branches ci-dessus sont vérifiées : elles existent et correspondent à la
-branche de publication de chaque application. Frappe Builder publie depuis
-`master` et n'a pas de branche `main` ; une valeur inexacte fait échouer le
-`bench init` du workflow avec un `Remote branch not found`.
+Ces branches ne sont pas interchangeables et deux d'entre elles ne suivent pas la
+convention attendue. Elles ont été retenues sur constat, pas par convention.
+
+**Frappe Builder n'a pas de branche `main`.** Sa branche de publication est `master`,
+celle que cible la version v1.32.0. Une branche inexistante fait échouer le
+`bench init` sur un `Remote branch not found`, après plusieurs minutes de
+construction. C'est précisément ce que détecte le contrôle préalable du workflow.
+
+**Frappe Drive est suivi sur `develop` et non sur `main`.** Sur `main`, le script de
+post-installation appelle `pnpm install` derrière une garde qui n'installe pnpm 10 que
+si aucun `pnpm` n'est déjà présent. Or l'image de construction de Frappe fournit un
+shim corepack : la garde considère pnpm présent, saute l'épinglage, et corepack résout
+`latest`, soit pnpm 11. Cette version transforme en erreur fatale l'avertissement
+`ERR_PNPM_IGNORED_BUILDS` et la construction s'arrête. La branche `develop` compile son
+frontend avec yarn, sans pnpm, et n'est pas concernée. C'est aussi la branche active du
+dépôt, en avance de 249 commits sur `main`, et celle dont a été publiée la v0.3.0.
 
 ## 1. Construction et publication de l'image
 
