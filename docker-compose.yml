@@ -1,11 +1,15 @@
 # Stack Frappe / ERPNext pour Dokploy, en mode Docker Compose.
 #
-# Mode Compose obligatoire, pas Docker Stack : les services « configurator » et
-# « create-site » sont éphémères et les autres services en dépendent via
-# service_completed_successfully. En mode Swarm, ces conteneurs seraient
-# redémarrés en boucle et la condition ne serait jamais satisfaite.
+# Mode Compose obligatoire, pas Docker Stack : les services « configurator »,
+# « create-site » et « migrator » sont éphémères et les autres services en
+# dépendent via service_completed_successfully. En mode Swarm, ces conteneurs
+# seraient redémarrés en boucle et la condition ne serait jamais satisfaite.
 #
-# Structure et commandes reprises de pwd.yml du dépôt frappe/frappe_docker.
+# Chaîne de démarrage :
+#   configurator -> create-site -> migrator -> backend, workers, scheduler -> frontend
+#
+# Structure et commandes reprises de pwd.yml du dépôt frappe/frappe_docker,
+# service migrator adapté de overrides/compose.migrator.yaml.
 
 x-frappe-image: &frappe_image
   image: ${ERP_IMAGE}
@@ -14,13 +18,16 @@ x-frappe-image: &frappe_image
   networks:
     - frappe-network
 
+# Les services de longue durée attendent la fin du migrator, et non celle du
+# configurator : sans cela ils serviraient des requêtes pendant la migration,
+# donc sur une base pas encore alignée sur le code de l'image.
 x-backend-defaults: &backend_defaults
   <<: *frappe_image
   volumes:
     - sites:/home/frappe/frappe-bench/sites
     - logs:/home/frappe/frappe-bench/logs
   depends_on:
-    configurator:
+    migrator:
       condition: service_completed_successfully
 
 services:
@@ -95,6 +102,44 @@ services:
         condition: service_completed_successfully
       db:
         condition: service_healthy
+
+  # Aligne le schéma de la base sur le code embarqué dans l'image : synchronisation
+  # des DocTypes, exécution des patchs, fixtures, reconstruction du cache.
+  # Indispensable après tout changement d'image, sans quoi le site devient
+  # incohérent ou refuse de démarrer.
+  #
+  # restart "no" et non on-failure:5 comme dans l'override amont : puisque backend,
+  # workers et scheduler dépendent ici de sa réussite, un code de sortie non nul
+  # doit échouer franchement plutôt que d'être rejoué sur une base à moitié migrée.
+  migrator:
+    <<: *frappe_image
+    restart: "no"
+    volumes:
+      - sites:/home/frappe/frappe-bench/sites
+      - logs:/home/frappe/frappe-bench/logs
+    environment:
+      SITE_NAME: ${SITE_NAME}
+      MIGRATE_SITES: ${MIGRATE_SITES:-true}
+    entrypoint:
+      - bash
+      - -c
+    command:
+      - >
+        if [ "$$MIGRATE_SITES" != "true" ]; then
+          echo "[migrator] Migration désactivée par MIGRATE_SITES";
+          exit 0;
+        fi;
+        if [ ! -f "sites/$$SITE_NAME/site_config.json" ]; then
+          echo "[migrator] Aucun site $$SITE_NAME trouvé, rien à migrer";
+          exit 0;
+        fi;
+        echo "[migrator] Migration du site $$SITE_NAME";
+        bench --site $$SITE_NAME migrate;
+    depends_on:
+      configurator:
+        condition: service_completed_successfully
+      create-site:
+        condition: service_completed_successfully
 
   backend:
     <<: *backend_defaults
